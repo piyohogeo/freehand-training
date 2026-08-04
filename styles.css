@@ -7,10 +7,20 @@ body {
   background: white;
 }
 
-#canvas {
+#result-canvas,
+#input-canvas {
+  position: fixed;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
+}
+
+#result-canvas {
+  pointer-events: none;
+}
+
+#input-canvas {
   cursor: crosshair;
   touch-action: none;
 }

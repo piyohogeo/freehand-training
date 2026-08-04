@@ -8,8 +8,7 @@ body {
 }
 
 #result-canvas,
-#input-canvas,
-#prediction-canvas {
+#input-canvas {
   position: fixed;
   inset: 0;
   display: block;
@@ -18,10 +17,6 @@ body {
 }
 
 #result-canvas {
-  pointer-events: none;
-}
-
-#prediction-canvas {
   pointer-events: none;
 }
 

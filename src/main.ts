@@ -34,10 +34,8 @@ function requireContext(
 
 const resultCanvas = requireCanvas("#result-canvas");
 const inputCanvas = requireCanvas("#input-canvas");
-const predictionCanvas = requireCanvas("#prediction-canvas");
 const resultContext = requireContext(resultCanvas);
 const inputContext = requireContext(inputCanvas, true);
-const predictionContext = requireContext(predictionCanvas, true);
 
 let pixelRatio = 1;
 let activePointerId: number | null = null;
@@ -57,15 +55,13 @@ function resizeCanvas(): void {
   pixelRatio = window.devicePixelRatio || 1;
   const width = Math.max(1, Math.round(window.innerWidth * pixelRatio));
   const height = Math.max(1, Math.round(window.innerHeight * pixelRatio));
-  for (const canvas of [resultCanvas, inputCanvas, predictionCanvas]) {
+  for (const canvas of [resultCanvas, inputCanvas]) {
     canvas.width = width;
     canvas.height = height;
   }
   resultContext.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
   inputContext.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-  predictionContext.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
   configureLine(inputContext);
-  configureLine(predictionContext);
   activePointerId = null;
   activePoints = null;
   activePathLength = 0;
@@ -94,22 +90,6 @@ function appendSamples(events: readonly PointerEvent[]): void {
     previous = current;
   }
   inputContext.stroke();
-}
-
-function drawPredictions(event: PointerEvent): void {
-  predictionContext.clearRect(0, 0, window.innerWidth, window.innerHeight);
-  if (activePoints === null || typeof event.getPredictedEvents !== "function") return;
-  const predictions = event.getPredictedEvents();
-  if (predictions.length === 0) return;
-
-  const previous = activePoints[activePoints.length - 1]!;
-  predictionContext.beginPath();
-  predictionContext.moveTo(previous.x, previous.y);
-  for (const prediction of predictions) {
-    const point = pointerPosition(prediction);
-    predictionContext.lineTo(point.x, point.y);
-  }
-  predictionContext.stroke();
 }
 
 function drawPath(context: CanvasRenderingContext2D, points: readonly Point[]): void {
@@ -223,7 +203,6 @@ function finishStroke(): void {
 
   finishedStrokes.push(cacheStroke(points, circle, score));
   inputContext.clearRect(0, 0, window.innerWidth, window.innerHeight);
-  predictionContext.clearRect(0, 0, window.innerWidth, window.innerHeight);
   activePathLength = 0;
   requestResultRender();
 }
@@ -235,20 +214,13 @@ inputCanvas.addEventListener("pointerdown", (event) => {
   activePoints = [pointerPosition(event)];
   activePathLength = 0;
   inputContext.clearRect(0, 0, window.innerWidth, window.innerHeight);
-  predictionContext.clearRect(0, 0, window.innerWidth, window.innerHeight);
 });
 
-function handlePointerMovement(event: PointerEvent): void {
+inputCanvas.addEventListener("pointermove", (event) => {
   if (event.pointerId !== activePointerId || activePoints === null) return;
-  if (event.cancelable) event.preventDefault();
+  event.preventDefault();
   appendSamples(event.getCoalescedEvents?.() ?? [event]);
-  drawPredictions(event);
-}
-
-// Raw updates avoid the frame-aligned batching allowed for pointermove.
-// Only one movement event type is registered to avoid processing samples twice.
-const movementEventName = "onpointerrawupdate" in window ? "pointerrawupdate" : "pointermove";
-inputCanvas.addEventListener(movementEventName, handlePointerMovement as EventListener);
+});
 
 inputCanvas.addEventListener("pointerup", (event) => {
   if (event.pointerId !== activePointerId) return;

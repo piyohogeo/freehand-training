@@ -1,4 +1,11 @@
-import { fitCircle, formatScore, type CircleFit, type Point } from "./geometry.js";
+import {
+  angularTravel,
+  fitCircle,
+  formatScore,
+  MINIMUM_ANGULAR_TRAVEL,
+  type CircleFit,
+  type Point,
+} from "./geometry.js";
 
 const FADE_DURATION_MS = 10_000;
 const MINIMUM_POINT_COUNT = 3;
@@ -333,7 +340,11 @@ function finishStroke(): void {
   let score: string | null = null;
   if (points.length >= MINIMUM_POINT_COUNT && activePathLength >= MINIMUM_PATH_LENGTH) {
     circle = fitCircle(points);
-    if (circle !== null) score = formatScore(circle);
+    if (circle !== null && angularTravel(points, circle.center) >= MINIMUM_ANGULAR_TRAVEL) {
+      score = formatScore(circle);
+    } else {
+      circle = null;
+    }
   }
 
   finishedStrokes.push(cacheStroke(points, circle, score));

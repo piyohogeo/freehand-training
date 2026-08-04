@@ -11,6 +11,7 @@ export interface CircleFit {
 
 const SINGULARITY_TOLERANCE = 1e-12;
 export const INFINITY_ERROR_THRESHOLD = 1e-12;
+export const MINIMUM_ANGULAR_TRAVEL = (Math.PI * 5) / 3;
 
 function determinant3(matrix: readonly (readonly number[])[]): number {
   const a = matrix[0]!;
@@ -67,6 +68,22 @@ export function pathLength(points: readonly Point[]): number {
     length += Math.hypot(current.x - previous.x, current.y - previous.y);
   }
   return length;
+}
+
+export function angularTravel(points: readonly Point[], center: Point): number {
+  let travel = 0;
+  for (let index = 1; index < points.length; index += 1) {
+    const previous = points[index - 1]!;
+    const current = points[index]!;
+    const previousAngle = Math.atan2(previous.y - center.y, previous.x - center.x);
+    const currentAngle = Math.atan2(current.y - center.y, current.x - center.x);
+    const difference = Math.atan2(
+      Math.sin(currentAngle - previousAngle),
+      Math.cos(currentAngle - previousAngle),
+    );
+    travel += Math.abs(difference);
+  }
+  return travel;
 }
 
 export function fitCircle(points: readonly Point[]): CircleFit | null {

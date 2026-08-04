@@ -20,6 +20,26 @@ async function drawCircle(page: import("@playwright/test").Page, pointCount = 64
   await page.mouse.up();
 }
 
+async function drawArc(
+  page: import("@playwright/test").Page,
+  degrees: number,
+  pointCount = 60,
+): Promise<void> {
+  const center = { x: 400, y: 300 };
+  const radius = 120;
+  const radians = degrees * Math.PI / 180;
+  await page.mouse.move(center.x + radius, center.y);
+  await page.mouse.down();
+  for (let index = 1; index <= pointCount; index += 1) {
+    const angle = radians * index / pointCount;
+    await page.mouse.move(
+      center.x + radius * Math.cos(angle),
+      center.y + radius * Math.sin(angle),
+    );
+  }
+  await page.mouse.up();
+}
+
 async function countResultPixels(page: import("@playwright/test").Page): Promise<PixelCounts> {
   return page.locator("#result-canvas").evaluate((canvas: HTMLCanvasElement) => {
     const context = canvas.getContext("2d");
@@ -57,6 +77,24 @@ test("draws a visible stroke and fitted circle without page errors", async ({ pa
   expect(counts.black, "hand-drawn black pixels").toBeGreaterThan(20);
   expect(counts.red, "fitted-circle red pixels").toBeGreaterThan(20);
   expect(pageErrors).toEqual([]);
+});
+
+test("rejects an arc shorter than 300 degrees", async ({ page }) => {
+  await page.goto("/");
+  await drawArc(page, 30, 20);
+
+  const counts = await countResultPixels(page);
+  expect(counts.black, "hand-drawn arc pixels").toBeGreaterThan(20);
+  expect(counts.red, "fitted circle must stay hidden").toBe(0);
+});
+
+test("accepts more than one turn with separated endpoints", async ({ page }) => {
+  await page.goto("/");
+  await drawArc(page, 540, 108);
+
+  const counts = await countResultPixels(page);
+  expect(counts.black, "hand-drawn multi-turn pixels").toBeGreaterThan(20);
+  expect(counts.red, "fitted circle pixels").toBeGreaterThan(20);
 });
 
 test.describe("input diagnostics", () => {

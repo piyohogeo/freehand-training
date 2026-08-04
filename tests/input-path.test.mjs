@@ -30,3 +30,15 @@ test("keeps expensive work out of the pointer movement hot path", async () => {
     "Unthrottled pointerrawupdate can overwhelm the rendering pipeline",
   );
 });
+
+test("uses standard canvas rendering and versioned production assets", async () => {
+  const [source, builtIndex] = await Promise.all([
+    readFile(new URL("../src/main.ts", import.meta.url), "utf8"),
+    readFile(new URL("../public/index.html", import.meta.url), "utf8"),
+  ]);
+
+  assert.equal(source.includes("desynchronized"), false);
+  assert.equal(builtIndex.includes("__BUILD_HASH__"), false);
+  assert.match(builtIndex, /styles\.css\?v=[a-f0-9]{12}/);
+  assert.match(builtIndex, /main\.js\?v=[a-f0-9]{12}/);
+});

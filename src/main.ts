@@ -20,14 +20,8 @@ function requireCanvas(selector: string): HTMLCanvasElement {
   return element;
 }
 
-function requireContext(
-  canvas: HTMLCanvasElement,
-  lowLatency = false,
-): CanvasRenderingContext2D {
-  const canvasContext = canvas.getContext(
-    "2d",
-    lowLatency ? { desynchronized: true } : undefined,
-  );
+function requireContext(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
+  const canvasContext = canvas.getContext("2d");
   if (canvasContext === null) throw new Error("2D canvas is not supported.");
   return canvasContext;
 }
@@ -35,7 +29,7 @@ function requireContext(
 const resultCanvas = requireCanvas("#result-canvas");
 const inputCanvas = requireCanvas("#input-canvas");
 const resultContext = requireContext(resultCanvas);
-const inputContext = requireContext(inputCanvas, true);
+const inputContext = requireContext(inputCanvas);
 
 let pixelRatio = 1;
 let activePointerId: number | null = null;

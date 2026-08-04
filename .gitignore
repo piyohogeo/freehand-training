@@ -4,3 +4,6 @@ public/
 *.suo
 **/bin/
 **/obj/
+playwright-report/
+test-results/
+debug.log

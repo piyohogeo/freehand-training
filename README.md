@@ -39,6 +39,9 @@ Linux上のGitHub ActionsではFirefoxを含む三ブラウザを実行します
 - `/latency.html?mode=canvas` — 通常の透明2D Canvas
 - `/latency.html?mode=opaque` — 通常の不透明2D Canvas
 - `/latency.html?mode=desync` — 不透明な低遅延Canvas
+- `/latency.html?mode=webgl` — `desynchronized`と`preserveDrawingBuffer`を要求するWebGL
+- `/latency.html?mode=webgl-frame` — WebGL入力を画面更新ごとに1回へ集約
+- `/latency.html?mode=webgl-frame-no-preserve` — 保持バッファを使わず、画面更新ごとに全点を再描画
 - `/latency.html?mode=svg` — SVG polyline
 - `/latency.html?mode=dom` — CSS要素による線分
 
@@ -52,11 +55,19 @@ Linux上のGitHub ActionsではFirefoxを含む三ブラウザを実行します
 安定版の`/`は変更せず、`/experiment.html`で低遅延方式を段階的に比較します。
 
 - `/experiment.html?mode=baseline` — 安定版と同じOSカーソル
-- `/experiment.html?mode=cursor` — OSカーソルを隠し、ページ内Canvasでカーソルを描画
+- `/experiment.html?mode=cursor` — OSカーソルを隠し、ページ内Canvasでカーソルを入力イベント内に即時描画
 - `/experiment.html?mode=cursor&hardwareCursor=1` — 両方を表示して相対遅延を測定
+- `/experiment.html?mode=cursor&hardwareCursor=1&delegatedInk=0` — Delegated Inkを無効にして比較
+- `/experiment.html?mode=cursor&hardwareCursor=1&delegatedInk=0&prediction=browser` — ブラウザ標準の予測点を青い一時描線として表示
+- `/experiment.html?mode=cursor&hardwareCursor=1&delegatedInk=0&prediction=modeler` — Ink Stroke Modeler系の予測をオレンジ色で表示
+- `/experiment.html?mode=cursor&hardwareCursor=1&delegatedInk=0&prediction=modeler-kalman` — Ink Stroke Modeler系のKalman未来予測を紫色で表示（未来延長の目標50ms）
 
-第1段階では描線・採点処理に安定版の`main.js`をそのまま使用し、カスタムカーソル層だけを
-追加しています。実験値は開発者ツールから`window.__cursorExperiment`で確認できます。
+描線・採点処理は安定版と共通です。実験ページから渡す既定ONの設定だけでDelegated Inkを
+切り替えます。実験値は開発者ツールから`window.__cursorExperiment`で確認できます。
+予測描線は次の実入力で消去され、採点対象の点列には追加されません。
+実入力と各時点の予測点列は`window.__predictionTrace`に最大20,000件記録されます。
+ModelerモードはGoogle公式サイトから関連実装として案内されている、Google非保守の
+TypeScript移植版をコミットSHA固定で使用します。詳細は`THIRD_PARTY_NOTICES.md`を参照してください。
 
 `npm run build`の出力先は`public/`です。ローカル確認時は任意のHTTPサーバーで
 `public/`を配信してください。

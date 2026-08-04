@@ -11,6 +11,10 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
+    "esbuild": "^0.25.8",
     "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "ink-stroke-modeler-ts": "github:WhiteboardCX/ink-stroke-modeler-ts#240d80f2c78c2f70317b498d37564f90fcddfe0c"
   }
 }

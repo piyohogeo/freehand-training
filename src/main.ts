@@ -44,7 +44,7 @@ interface InputDiagnostics {
   maximumEventAgeMs: number;
   averageFrameDelayMs: number;
   maximumFrameDelayMs: number;
-  inkStatus: "unsupported" | "initializing" | "ready" | "failed" | "runtime-error";
+  inkStatus: "disabled" | "unsupported" | "initializing" | "ready" | "failed" | "runtime-error";
   inkCallCount: number;
   canvasDrawCount: number;
 }
@@ -66,6 +66,10 @@ const inputCanvas = requireCanvas("#input-canvas");
 const resultContext = requireContext(resultCanvas);
 const inputContext = requireContext(inputCanvas);
 const searchParameters = new URLSearchParams(location.search);
+const runtimeOptions = (window as unknown as {
+  __freehandOptions?: { readonly delegatedInkEnabled?: boolean };
+}).__freehandOptions;
+const delegatedInkEnabled = runtimeOptions?.delegatedInkEnabled !== false;
 const rawInputEnabled = searchParameters.get("raw") === "1" && "onpointerrawupdate" in window;
 const diagnostics: InputDiagnostics = {
   inputEvent: rawInputEnabled ? "pointerrawupdate" : "pointermove",
@@ -75,7 +79,7 @@ const diagnostics: InputDiagnostics = {
   maximumEventAgeMs: 0,
   averageFrameDelayMs: 0,
   maximumFrameDelayMs: 0,
-  inkStatus: "unsupported",
+  inkStatus: delegatedInkEnabled ? "unsupported" : "disabled",
   inkCallCount: 0,
   canvasDrawCount: 0,
 };
@@ -134,7 +138,7 @@ function recordInputTiming(event: PointerEvent): void {
 
 let inkPresenter: DelegatedInkTrailPresenter | null = null;
 const ink = (navigator as InkNavigator).ink;
-if (ink !== undefined) {
+if (delegatedInkEnabled && ink !== undefined) {
   diagnostics.inkStatus = "initializing";
   void ink.requestPresenter({ presentationArea: inputCanvas }).then(
     (presenter) => {

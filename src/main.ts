@@ -14,6 +14,34 @@ interface CachedStroke {
   readonly finishedAt: number;
 }
 
+interface DelegatedInkTrailPresenter {
+  updateInkTrailStartPoint(
+    event: PointerEvent,
+    style: { readonly color: string; readonly diameter: number },
+  ): void;
+}
+
+interface InkNavigator extends Navigator {
+  readonly ink?: {
+    requestPresenter(options: {
+      readonly presentationArea: Element;
+    }): Promise<DelegatedInkTrailPresenter>;
+  };
+}
+
+interface InputDiagnostics {
+  inputEvent: "pointermove" | "pointerrawupdate";
+  pointerType: string;
+  eventCount: number;
+  averageEventAgeMs: number;
+  maximumEventAgeMs: number;
+  averageFrameDelayMs: number;
+  maximumFrameDelayMs: number;
+  inkStatus: "unsupported" | "initializing" | "ready" | "failed" | "runtime-error";
+  inkCallCount: number;
+  canvasDrawCount: number;
+}
+
 function requireCanvas(selector: string): HTMLCanvasElement {
   const element = document.querySelector<HTMLCanvasElement>(selector);
   if (element === null) throw new Error(`Canvas element ${selector} was not found.`);
@@ -30,6 +58,91 @@ const resultCanvas = requireCanvas("#result-canvas");
 const inputCanvas = requireCanvas("#input-canvas");
 const resultContext = requireContext(resultCanvas);
 const inputContext = requireContext(inputCanvas);
+const searchParameters = new URLSearchParams(location.search);
+const rawInputEnabled = searchParameters.get("raw") === "1" && "onpointerrawupdate" in window;
+const diagnostics: InputDiagnostics = {
+  inputEvent: rawInputEnabled ? "pointerrawupdate" : "pointermove",
+  pointerType: "none",
+  eventCount: 0,
+  averageEventAgeMs: 0,
+  maximumEventAgeMs: 0,
+  averageFrameDelayMs: 0,
+  maximumFrameDelayMs: 0,
+  inkStatus: "unsupported",
+  inkCallCount: 0,
+  canvasDrawCount: 0,
+};
+(window as unknown as { __freehandDiagnostics: InputDiagnostics }).__freehandDiagnostics = diagnostics;
+
+const debugEnabled = searchParameters.get("debug") === "1";
+const debugElement = debugEnabled ? document.createElement("pre") : null;
+if (debugElement !== null) {
+  debugElement.id = "input-diagnostics";
+  document.body.append(debugElement);
+}
+
+let eventAgeTotal = 0;
+let frameDelayTotal = 0;
+let frameSampleCount = 0;
+let pendingDiagnosticFrame: number | null = null;
+let latestInputHandledAt = 0;
+
+function renderDiagnostics(): void {
+  if (debugElement === null) return;
+  debugElement.textContent = [
+    `input: ${diagnostics.inputEvent}`,
+    `pointer: ${diagnostics.pointerType}`,
+    `events: ${diagnostics.eventCount}`,
+    `canvas draws: ${diagnostics.canvasDrawCount}`,
+    `event age: ${diagnostics.averageEventAgeMs.toFixed(2)} ms avg / ${diagnostics.maximumEventAgeMs.toFixed(2)} ms max`,
+    `next frame: ${diagnostics.averageFrameDelayMs.toFixed(2)} ms avg / ${diagnostics.maximumFrameDelayMs.toFixed(2)} ms max`,
+    `ink: ${diagnostics.inkStatus} (${diagnostics.inkCallCount} calls)`,
+  ].join("\n");
+}
+
+function recordInputTiming(event: PointerEvent): void {
+  const handledAt = performance.now();
+  latestInputHandledAt = handledAt;
+  diagnostics.pointerType = event.pointerType || "unknown";
+  diagnostics.eventCount += 1;
+  const eventAge = handledAt - event.timeStamp;
+  if (eventAge >= 0 && eventAge < 10_000) {
+    eventAgeTotal += eventAge;
+    diagnostics.averageEventAgeMs = eventAgeTotal / diagnostics.eventCount;
+    diagnostics.maximumEventAgeMs = Math.max(diagnostics.maximumEventAgeMs, eventAge);
+  }
+
+  if (!debugEnabled || pendingDiagnosticFrame !== null) return;
+  pendingDiagnosticFrame = requestAnimationFrame((frameTime) => {
+    pendingDiagnosticFrame = null;
+    // Use the freshest input received before this frame, not the first queued event.
+    const delay = Math.max(0, frameTime - latestInputHandledAt);
+    frameDelayTotal += delay;
+    frameSampleCount += 1;
+    diagnostics.averageFrameDelayMs = frameDelayTotal / frameSampleCount;
+    diagnostics.maximumFrameDelayMs = Math.max(diagnostics.maximumFrameDelayMs, delay);
+    renderDiagnostics();
+  });
+}
+
+let inkPresenter: DelegatedInkTrailPresenter | null = null;
+const ink = (navigator as InkNavigator).ink;
+if (ink !== undefined) {
+  diagnostics.inkStatus = "initializing";
+  void ink.requestPresenter({ presentationArea: inputCanvas }).then(
+    (presenter) => {
+      inkPresenter = presenter;
+      diagnostics.inkStatus = "ready";
+      renderDiagnostics();
+    },
+    () => {
+      inkPresenter = null;
+      diagnostics.inkStatus = "failed";
+      renderDiagnostics();
+    },
+  );
+}
+renderDiagnostics();
 
 let pixelRatio = 1;
 let activePointerId: number | null = null;
@@ -37,6 +150,8 @@ let activePoints: Point[] | null = null;
 let activePathLength = 0;
 let finishedStrokes: CachedStroke[] = [];
 let animationFrame: number | null = null;
+let queuedInputFrame: number | null = null;
+let queuedSamples: PointerEvent[] = [];
 
 function configureLine(context: CanvasRenderingContext2D): void {
   context.strokeStyle = "black";
@@ -62,6 +177,9 @@ function resizeCanvas(): void {
   finishedStrokes = [];
   if (animationFrame !== null) cancelAnimationFrame(animationFrame);
   animationFrame = null;
+  if (queuedInputFrame !== null) cancelAnimationFrame(queuedInputFrame);
+  queuedInputFrame = null;
+  queuedSamples = [];
 }
 
 function pointerPosition(event: PointerEvent): Point {
@@ -84,6 +202,28 @@ function appendSamples(events: readonly PointerEvent[]): void {
     previous = current;
   }
   inputContext.stroke();
+  diagnostics.canvasDrawCount += 1;
+}
+
+function flushQueuedSamples(): void {
+  if (queuedInputFrame !== null) cancelAnimationFrame(queuedInputFrame);
+  queuedInputFrame = null;
+  if (queuedSamples.length === 0) return;
+  const samples = queuedSamples;
+  queuedSamples = [];
+  appendSamples(samples);
+}
+
+function queueSamplesForNextFrame(samples: readonly PointerEvent[]): void {
+  queuedSamples.push(...samples);
+  if (queuedInputFrame !== null) return;
+  queuedInputFrame = requestAnimationFrame(() => {
+    queuedInputFrame = null;
+    if (queuedSamples.length === 0) return;
+    const samplesToDraw = queuedSamples;
+    queuedSamples = [];
+    appendSamples(samplesToDraw);
+  });
 }
 
 function drawPath(context: CanvasRenderingContext2D, points: readonly Point[]): void {
@@ -184,6 +324,7 @@ function requestResultRender(): void {
 
 function finishStroke(): void {
   if (activePoints === null) return;
+  flushQueuedSamples();
   const points = activePoints;
   activePointerId = null;
   activePoints = null;
@@ -210,15 +351,45 @@ inputCanvas.addEventListener("pointerdown", (event) => {
   inputContext.clearRect(0, 0, window.innerWidth, window.innerHeight);
 });
 
-inputCanvas.addEventListener("pointermove", (event) => {
+function updateDelegatedInk(event: PointerEvent): void {
+  if (event.pointerType !== "pen" || !event.isTrusted || inkPresenter === null) return;
+  try {
+    inkPresenter.updateInkTrailStartPoint(event, { color: "black", diameter: 1 });
+    diagnostics.inkCallCount += 1;
+  } catch {
+    // The experimental API can disappear or reject a device at runtime.
+    inkPresenter = null;
+    diagnostics.inkStatus = "runtime-error";
+  }
+}
+
+function handlePointerInput(event: PointerEvent): void {
   if (event.pointerId !== activePointerId || activePoints === null) return;
-  event.preventDefault();
+  if (event.cancelable) event.preventDefault();
+  recordInputTiming(event);
   appendSamples(event.getCoalescedEvents?.() ?? [event]);
-});
+  updateDelegatedInk(event);
+}
+
+function handleRawPointerInput(event: PointerEvent): void {
+  if (event.pointerId !== activePointerId || activePoints === null) return;
+  recordInputTiming(event);
+  queueSamplesForNextFrame(event.getCoalescedEvents?.() ?? [event]);
+  updateDelegatedInk(event);
+}
+
+if (rawInputEnabled) {
+  inputCanvas.addEventListener("pointerrawupdate", (event) => {
+    handleRawPointerInput(event as PointerEvent);
+  });
+} else {
+  inputCanvas.addEventListener("pointermove", handlePointerInput);
+}
 
 inputCanvas.addEventListener("pointerup", (event) => {
   if (event.pointerId !== activePointerId) return;
   event.preventDefault();
+  flushQueuedSamples();
   appendSamples([event]);
   finishStroke();
 });

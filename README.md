@@ -22,6 +22,30 @@ npm run test:e2e
 2,000件の入力イベント処理時間を検証します。
 WindowsローカルではPlaywright Firefoxのページ生成問題を避けてChromium・WebKitを実行し、
 Linux上のGitHub ActionsではFirefoxを含む三ブラウザを実行します。
+対応するEdge・Chromeのペン入力では、Delegated Ink Trails APIへ黒1pxの先行描画を
+委譲します。APIがない、または
+初期化・描画に失敗した場合は標準Canvasだけで動作します。
+
+入力経路と遅延の診断値はURL末尾に`?debug=1`を付けると画面左上に表示されます。
+`event age`はイベント発生から処理開始まで、`next frame`は処理から次の描画機会までの時間です。
+
+`?debug=1&raw=1`では、対応ブラウザの`pointerrawupdate`を画面更新ごとに一括描画する
+実験を有効にできます。rawイベント内ではCanvasを描画せず、前回のような処理飽和を防ぎます。
+
+### 表示遅延の検証ページ
+
+`npm run build`後にローカルサーバーを起動し、次のURLを個別に開いて比較します。
+
+- `/latency.html?mode=canvas` — 通常の透明2D Canvas
+- `/latency.html?mode=opaque` — 通常の不透明2D Canvas
+- `/latency.html?mode=desync` — 不透明な低遅延Canvas
+- `/latency.html?mode=svg` — SVG polyline
+- `/latency.html?mode=dom` — CSS要素による線分
+
+各ページはpointerdownで消去され、押している間だけ黒1pxの線を描きます。スマートフォンで
+撮影する場合は、なるべく一定速度で横方向へ直線を描くとカーソルとの時間差を比較しやすくなります。
+描画面には診断DOMを重ねず、方式名と低遅延Canvasの有効・フォールバック状態はブラウザの
+ページタイトルで確認できます。
 
 `npm run build`の出力先は`public/`です。ローカル確認時は任意のHTTPサーバーで
 `public/`を配信してください。

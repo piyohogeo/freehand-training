@@ -24,3 +24,16 @@ body {
   cursor: crosshair;
   touch-action: none;
 }
+
+#input-diagnostics {
+  position: fixed;
+  z-index: 10;
+  top: 8px;
+  left: 8px;
+  margin: 0;
+  padding: 8px;
+  color: #fff;
+  background: rgb(0 0 0 / 75%);
+  font: 12px/1.4 monospace;
+  pointer-events: none;
+}

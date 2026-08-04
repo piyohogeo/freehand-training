@@ -7,3 +7,4 @@ public/
 playwright-report/
 test-results/
 debug.log
+.tmp/

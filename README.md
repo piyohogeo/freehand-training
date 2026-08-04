@@ -47,6 +47,17 @@ Linux上のGitHub ActionsではFirefoxを含む三ブラウザを実行します
 描画面には診断DOMを重ねず、方式名と低遅延Canvasの有効・フォールバック状態はブラウザの
 ページタイトルで確認できます。
 
+### 低遅延の試験ページ
+
+安定版の`/`は変更せず、`/experiment.html`で低遅延方式を段階的に比較します。
+
+- `/experiment.html?mode=baseline` — 安定版と同じOSカーソル
+- `/experiment.html?mode=cursor` — OSカーソルを隠し、ページ内Canvasでカーソルを描画
+- `/experiment.html?mode=cursor&hardwareCursor=1` — 両方を表示して相対遅延を測定
+
+第1段階では描線・採点処理に安定版の`main.js`をそのまま使用し、カスタムカーソル層だけを
+追加しています。実験値は開発者ツールから`window.__cursorExperiment`で確認できます。
+
 `npm run build`の出力先は`public/`です。ローカル確認時は任意のHTTPサーバーで
 `public/`を配信してください。
 

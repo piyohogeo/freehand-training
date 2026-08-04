@@ -32,10 +32,11 @@ test("keeps raw input bounded to one queued canvas draw per frame", async () => 
 });
 
 test("uses standard canvas rendering and versioned production assets", async () => {
-  const [source, builtIndex, builtLatency] = await Promise.all([
+  const [source, builtIndex, builtLatency, builtExperiment] = await Promise.all([
     readFile(new URL("../src/main.ts", import.meta.url), "utf8"),
     readFile(new URL("../public/index.html", import.meta.url), "utf8"),
     readFile(new URL("../public/latency.html", import.meta.url), "utf8"),
+    readFile(new URL("../public/experiment.html", import.meta.url), "utf8"),
   ]);
 
   assert.equal(source.includes("desynchronized"), false);
@@ -45,4 +46,7 @@ test("uses standard canvas rendering and versioned production assets", async () 
   assert.equal(builtLatency.includes("__BUILD_HASH__"), false);
   assert.match(builtLatency, /latency\.css\?v=[a-f0-9]{12}/);
   assert.match(builtLatency, /latency\.js\?v=[a-f0-9]{12}/);
+  assert.equal(builtExperiment.includes("__BUILD_HASH__"), false);
+  assert.match(builtExperiment, /experiment\.css\?v=[a-f0-9]{12}/);
+  assert.match(builtExperiment, /experiment\.js\?v=[a-f0-9]{12}/);
 });
